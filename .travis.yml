@@ -1,0 +1,25 @@
+# See http://docs.travis-ci.com/user/languages/java/
+language: java
+jdk:
+  - openjdk7
+ 
+after_success:
+  - mvn site
+
+# Deploy JavaDocs to S3 static site.
+# See http://docs.travis-ci.com/user/deployment/s3/
+deploy:
+  provider: s3
+  # Access key is the public key.
+  access_key_id: AKIAIR6RC7HPGDLLSWKA
+  # Secret access key is the private key, encrypted for Travis.
+  secret_access_key:
+    secure: V8akwdmwjqbm4rPk7e/10a70+dAJ7221RSKp2AHHBqCV5gwrpKaYC1FTl9L4Nmat2ApmFlldAjGH5HD5YsKWSw3/mmd9TzqMrgJI4KA44OgjTBlIMw04LTPlyvkD+GOCyozvYJ4NuasTPc/UPPC/81sW6Dta8VnX/p9bwQpNeOQ=
+  bucket: javadocs.geotree.urbanetic.net
+  endpoint: javadocs.geotree.urbanetic.net.s3-website-ap-southeast-2.amazonaws.com
+  region: ap-southeast-2
+  local-dir: target/site/apidocs
+  skip_cleanup: true
+  on:
+    all_branches: true
+#    tags: true
