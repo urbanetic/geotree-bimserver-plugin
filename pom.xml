@@ -11,6 +11,15 @@
     <geo-coords.version>1.0.0</geo-coords.version>
   </properties>
 
+  <repositories>
+    <!-- Local repo for unpublished dependencies. -->
+    <repository>
+      <id>data-local</id>
+      <name>data</name>
+      <url>file://${project.basedir}/repo</url>
+    </repository>
+  </repositories>
+
   <!-- Dependencies -->
   <dependencies>
 
