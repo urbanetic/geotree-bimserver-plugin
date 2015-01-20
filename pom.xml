@@ -70,16 +70,10 @@
       <artifactId>common</artifactId>
       <version>2.5.0</version>
     </dependency>
-
     <dependency>
       <groupId>org.mod4j.org.eclipse.emf</groupId>
       <artifactId>ecore</artifactId>
       <version>2.5.0</version>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.emf</groupId>
-      <artifactId>ecore-xmi</artifactId>
-      <version>2.4.1</version>
     </dependency>
 
     <!-- Coordinates API -->
@@ -94,18 +88,33 @@
   <!-- Build management -->
   <build>
     <resources>
+      <!-- Include the plugin XML description. -->
       <resource>
         <directory>src/main/resources</directory>
         <includes>
-          <include>**/*</include>
+          <include>plugin/plugin.xml</include>
         </includes>
       </resource>
     </resources>
+
+    <plugins>
+      <!-- Use the Java 7 compiler. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.2</version>
+        <configuration>
+          <source>1.7</source>
+          <target>1.7</target>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
 
   <!-- JavaDoc -->
   <reporting>
     <plugins>
+      <!-- Build the Javadoc. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
