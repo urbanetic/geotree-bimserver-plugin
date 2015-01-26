@@ -33,7 +33,7 @@ Maven support for the BIMserver libraries is an [open issue][issue].
 [acs]: https://github.com/urbanetic/aurin-acs
 [atlas]: https://github.com/urbanetic/atlas
 [bimserver]: http://bimserver.org/
-[dockerhub]: 
+[dockerhub]: https://registry.hub.docker.com/u/urbanetic/geotree-bimserver/
 [geotree]: https://github.com/urbanetic/geotree-bimserver-plugin
 [install]: https://github.com/opensourceBIM/BIMserver/wiki/Get-Started-Quick-Guide
 [issue]: https://github.com/opensourceBIM/BIMserver/issues/143
