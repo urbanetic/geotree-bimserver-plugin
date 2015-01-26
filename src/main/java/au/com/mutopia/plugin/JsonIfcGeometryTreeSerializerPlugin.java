@@ -8,8 +8,7 @@ import org.bimserver.plugins.serializers.AbstractSerializerPlugin;
 import org.bimserver.plugins.serializers.EmfSerializer;
 
 /**
- * Serializer plugin for BIMserver to convert a BIM model into a JSON document containing a
- * hierarchy of the IFC elements, their geometries, colors and parameters.
+ * Serializer plugin for BimServer, to extract Ifc object hierarchy, color and parameters.
  */
 public class JsonIfcGeometryTreeSerializerPlugin extends AbstractSerializerPlugin {
 

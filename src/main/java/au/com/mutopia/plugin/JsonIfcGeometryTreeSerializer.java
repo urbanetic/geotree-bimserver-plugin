@@ -7,7 +7,6 @@ import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,24 +58,24 @@ import org.eclipse.emf.common.util.EList;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.gson.stream.JsonWriter;
 
 /**
- * Serializer plugin for BIMserver to convert a BIM model into a JSON document containing a
- * hierarchy of the IFC elements, their geometries, colors and parameters.
+ * Serializer for BimServer, to extract Ifc object hierarchy, color and parameters.
  */
 public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
-
-  private static final Logger log = Logger.getLogger(JsonIfcGeometryTreeSerializer.class.getName());
-
   public static final String AREA = "area";
   public static final String HEIGHT = "height";
   public static final String UNKNOWN_STYLE = "UNKNOWN";
 
-  private final List<Long> surfaceStyleIds = new ArrayList<>();
-  private final Map<String, double[]> materialColorMap = new HashMap<>();
+  private static final Logger log = Logger.getLogger(JsonIfcGeometryTreeSerializer.class.getName());
 
-  private List<GeometryData> geometryDatas = new ArrayList<>();
+  private final List<Long> surfaceStyleIds = Lists.newArrayList();
+  private final HashMap<String, double[]> materialColorMap = Maps.newHashMap();
+
+  private List<GeometryData> geometryDatas = Lists.newArrayList();
   private int sameGeometry = 0;
 
   private double lengthUnitConversion = 1.0; // Default to Meter;
@@ -198,7 +197,7 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
   }
 
   private Map<String, Double> handleDefineBy(IfcObject ifcObject) throws IOException {
-    Map<String, Double> propertyMap = new HashMap<>();
+    Map<String, Double> propertyMap = Maps.newHashMap();
     double storeyArea = 0.0;
     double storeyHeight = 0.0;
 
@@ -268,7 +267,7 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
 
   private void writeIfcBuilding(JsonWriter jsonWriter, IfcBuilding ifcBuilding)
       throws SerializerException, RenderEngineException, IOException {
-    Map<String, Double> grossPropertyMap = new HashMap<>();
+    Map<String, Double> grossPropertyMap = Maps.newHashMap();
     grossPropertyMap.put(AREA, 0.0);
     grossPropertyMap.put(HEIGHT, 0.0);
 
@@ -307,7 +306,7 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
   private Map<String, Double> writeIfcBuildingStorey(JsonWriter jsonWriter,
       IfcBuildingStorey ifcBuildingStorey) throws SerializerException, RenderEngineException,
       IOException {
-    Map<String, Double> grossPropertyMap = new HashMap<>();
+    Map<String, Double> grossPropertyMap = Maps.newHashMap();
     grossPropertyMap.put(AREA, 0.0);
     grossPropertyMap.put(HEIGHT, 0.0);
 
@@ -697,5 +696,4 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
     }
     return lengthUnitPrefix;
   }
-
 }
