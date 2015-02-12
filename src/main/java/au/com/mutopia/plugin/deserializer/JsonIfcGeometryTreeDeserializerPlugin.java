@@ -18,7 +18,7 @@ public class JsonIfcGeometryTreeDeserializerPlugin implements DeserializerPlugin
 
   @Override
   public String getDescription() {
-    return "IfcXmlDeserializer";
+    return "JsonIfcGeometryTreeDeserializer";
   }
 
   @Override
