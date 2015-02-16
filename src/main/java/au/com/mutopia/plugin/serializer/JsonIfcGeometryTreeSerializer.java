@@ -1,12 +1,13 @@
 package au.com.mutopia.plugin.serializer;
 
+import au.com.mutopia.plugin.util.IfcUtil;
+
 import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.gson.stream.JsonWriter;
-import org.bimserver.emf.IdEObject;
-import org.bimserver.emf.IfcModelInterface;
+
 import org.bimserver.geometry.Matrix;
 import org.bimserver.models.ifc2x3tc1.*;
 import org.bimserver.models.store.SIPrefix;
@@ -33,6 +34,8 @@ import java.util.logging.Logger;
  */
 public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
   private static final Logger log = Logger.getLogger(JsonIfcGeometryTreeSerializer.class.getName());
+
+  private final IfcUtil ifcUtil = new IfcUtil();
 
   public static final String AREA = "area";
   public static final String HEIGHT = "height";
@@ -81,7 +84,7 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
    * Calculates the length unit conversion used for geometry vertices (meter, millimeter, etc ...).
    */
   private void calculateLengthUnitConversion() {
-    SIPrefix lengthUnitPrefix = getLengthUnitPrefix(model);
+    SIPrefix lengthUnitPrefix = ifcUtil.getLengthUnitPrefix(model);
     if (lengthUnitPrefix == null) {
       lengthUnitConversion = 1;
     } else {
@@ -124,12 +127,18 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
     if (object.isSetName()) {
       name = object.getName();
     }
+    String type = object.getObjectType();
+    if (Strings.isNullOrEmpty(type)) {
+      type = ifcUtil.stripClassName(object.getClass());
+    }
     if (object instanceof IfcSpatialStructureElement) {
       IfcSpatialStructureElement spatialStructureElement = (IfcSpatialStructureElement) object;
       if (spatialStructureElement.isSetLongName()) {
         name = spatialStructureElement.getLongName();
       }
       if (spatialStructureElement instanceof IfcSite) {
+        type = ifcUtil.stripClassName(IfcSite.class);
+
         IfcSite site = (IfcSite) spatialStructureElement;
         EList<Integer> longitude = site.getRefLongitude();
         EList<Integer> latitude = site.getRefLatitude();
@@ -141,8 +150,7 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
       writeIfcTreeContainsElements(writer, spatialStructureElement);
     }
     writer.name("name").value(name);
-    writer.name("type").value(
-        object.isSetObjectType() ? object.getObjectType() : stripClassName(object.getClass()));
+    writer.name("type").value(type);
     writeIfcTreeDecomposedBy(writer, object);
     writeParameters(writer, object);
 
@@ -225,6 +233,9 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
    * @throws IOException
    */
   private void writeMaterialAndGeometry(JsonWriter writer, IfcProduct product) throws IOException {
+    if (product instanceof IfcSpace) {
+      return;
+    }
     GeometryInfo geometryInfo = product.getGeometry();
     if (geometryInfo != null && geometryInfo.getData() != null) {
       GeometryData geometryData = geometryInfo.getData();
@@ -242,6 +253,7 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
 
       double[] colorData = getMaterial(product);
       if (colorData == null) {
+        log.info("No material styles found for: " + product.getName());
         if (product instanceof IfcSpace) {
           colorData = new double[] {0.0, 1.0, 0.0, 0.9};
         } else {
@@ -318,23 +330,10 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
           for (IfcProperty ifcProperty : ifcPropertySet.getHasProperties()) {
             if (ifcProperty instanceof IfcPropertySingleValue) {
               IfcPropertySingleValue ifcPropertySingleValue = (IfcPropertySingleValue) ifcProperty;
-              IfcValue nominalValue = ifcPropertySingleValue.getNominalValue();
-              if (nominalValue instanceof IfcSimpleValue) {
-                String simpleValue =
-                    getWrappedValueFromIfcSimpleValue((IfcSimpleValue) nominalValue);
-                if (!Strings.isNullOrEmpty(simpleValue)) {
-                  parameterValueMap.put(ifcPropertySingleValue.getName(), simpleValue);
-                }
-              } else if (nominalValue instanceof IfcMeasureValue) {
-                String measureValue =
-                    getWrappedValueFromIfcMeasureValue((IfcMeasureValue) nominalValue);
-                if (!Strings.isNullOrEmpty(measureValue)) {
-                  parameterValueMap.put(ifcPropertySingleValue.getName(), measureValue);
-                }
-              } else {
-                log.info("Unknown IfcPropertySingleValue value : "
-                    + ifcPropertySingleValue.getName() + " " + nominalValue);
-                continue;
+              String value =
+                  ifcUtil.getStringValueFromIfcValue(ifcPropertySingleValue.getNominalValue());
+              if (!Strings.isNullOrEmpty(value)) {
+                parameterValueMap.put(ifcPropertySingleValue.getName(), value);
               }
             } else {
               log.info("Unknown IfcProperty value : " + ifcProperty.getName());
@@ -344,28 +343,9 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
         } else if (relatingPropertyDefinition instanceof IfcElementQuantity) {
           IfcElementQuantity ifcElementQuantity = (IfcElementQuantity) relatingPropertyDefinition;
           for (IfcPhysicalQuantity ifcPhysicalQuantity : ifcElementQuantity.getQuantities()) {
-            if (ifcPhysicalQuantity instanceof IfcQuantityArea) {
-              IfcQuantityArea area = (IfcQuantityArea) ifcPhysicalQuantity;
-              parameterValueMap.put(area.getName(), area.getAreaValueAsString());
-            } else if (ifcPhysicalQuantity instanceof IfcQuantityLength) {
-              IfcQuantityLength length = (IfcQuantityLength) ifcPhysicalQuantity;
-              parameterValueMap.put(length.getName(), length.getLengthValueAsString());
-            } else if (ifcPhysicalQuantity instanceof IfcQuantityVolume) {
-              IfcQuantityVolume volume = (IfcQuantityVolume) ifcPhysicalQuantity;
-              parameterValueMap.put(volume.getName(), volume.getVolumeValueAsString());
-            } else if (ifcPhysicalQuantity instanceof IfcQuantityCount) {
-              IfcQuantityCount count = (IfcQuantityCount) ifcPhysicalQuantity;
-              parameterValueMap.put(count.getName(), count.getCountValueAsString());
-            } else if (ifcPhysicalQuantity instanceof IfcQuantityWeight) {
-              IfcQuantityWeight weight = (IfcQuantityWeight) ifcPhysicalQuantity;
-              parameterValueMap.put(weight.getName(), weight.getWeightValueAsString());
-            } else if (ifcPhysicalQuantity instanceof IfcQuantityTime) {
-              IfcQuantityTime time = (IfcQuantityTime) ifcPhysicalQuantity;
-              parameterValueMap.put(time.getName(), time.getTimeValueAsString());
-            } else {
-              log.info("Unknown IfcPhysicalQuantity value : " + ifcPhysicalQuantity.getName() + " "
-                  + ifcPhysicalQuantity);
-              continue;
+            String value = ifcUtil.getStringValueFromIfcPhysicalQuantity(ifcPhysicalQuantity);
+            if (!Strings.isNullOrEmpty(value)) {
+              parameterValueMap.put(ifcPhysicalQuantity.getName(), value);
             }
           }
         } else {
@@ -375,124 +355,6 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
       }
     }
     return parameterValueMap;
-  }
-
-  /**
-   * See http://www.buildingsmart-tech.org/ifc/IFC2x3/TC1/html/ifcmeasureresource/lexical/ifcsimplevalue.htm
-   * for list of different {@link IfcSimpleValue} types.
-   *
-   * @param simpleValue
-   * @return The string value from different {@link IfcSimpleValue} types.
-   */
-  private String getWrappedValueFromIfcSimpleValue(IfcSimpleValue simpleValue) {
-    if (simpleValue instanceof IfcInteger) {
-      IfcInteger integer = (IfcInteger) simpleValue;
-      return "" + integer.getWrappedValue();
-    } else if (simpleValue instanceof IfcReal) {
-      IfcReal real = (IfcReal) simpleValue;
-      return "" + real.getWrappedValue();
-    } else if (simpleValue instanceof IfcBoolean) {
-      IfcBoolean booleanValue = (IfcBoolean) simpleValue;
-      return "" + booleanValue.getWrappedValue();
-    } else if (simpleValue instanceof IfcIdentifier) {
-      IfcIdentifier identifier = (IfcIdentifier) simpleValue;
-      return "" + identifier.getWrappedValue();
-    } else if (simpleValue instanceof IfcText) {
-      IfcText text = (IfcText) simpleValue;
-      return "" + text.getWrappedValue();
-    } else if (simpleValue instanceof IfcLabel) {
-      IfcLabel label = (IfcLabel) simpleValue;
-      return "" + label.getWrappedValue();
-    } else if (simpleValue instanceof IfcLogical) {
-      IfcLogical logical = (IfcLogical) simpleValue;
-      return "" + logical.getWrappedValue();
-    } else {
-      log.info("Unknown IfcSimpleValue value : " + simpleValue.toString());
-    }
-    return null;
-  }
-
-  /**
-   * See http://www.buildingsmart-tech.org/ifc/IFC2x3/TC1/html/ifcmeasureresource/lexical/ifcmeasurevalue.htm
-   * for list of different {@link IfcMeasureValue} types.
-   *
-   * @param measureValue
-   * @return The string value from different {@link IfcMeasureValue} types.
-   */
-  private String getWrappedValueFromIfcMeasureValue(IfcMeasureValue measureValue) {
-    if (measureValue instanceof IfcVolumeMeasure) {
-      IfcVolumeMeasure volumeMeasure = (IfcVolumeMeasure) measureValue;
-      return "" + volumeMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcTimeMeasure) {
-      IfcTimeMeasure timeMeasure = (IfcTimeMeasure) measureValue;
-      return "" + timeMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcThermodynamicTemperatureMeasure) {
-      IfcThermodynamicTemperatureMeasure thermodynamicTemperatureMeasure =
-          (IfcThermodynamicTemperatureMeasure) measureValue;
-      return "" + thermodynamicTemperatureMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcSolidAngleMeasure) {
-      IfcSolidAngleMeasure solidAngleMeasure = (IfcSolidAngleMeasure) measureValue;
-      return "" + solidAngleMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcPositiveRatioMeasure) {
-      IfcPositiveRatioMeasure positiveRatioMeasure = (IfcPositiveRatioMeasure) measureValue;
-      return "" + positiveRatioMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcRatioMeasure) {
-      IfcRatioMeasure ratioMeasure = (IfcRatioMeasure) measureValue;
-      return "" + ratioMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcPositivePlaneAngleMeasure) {
-      IfcPositivePlaneAngleMeasure positivePlaneAngleMeasure =
-          (IfcPositivePlaneAngleMeasure) measureValue;
-      return "" + positivePlaneAngleMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcPlaneAngleMeasure) {
-      IfcPlaneAngleMeasure planeAngleMeasure = (IfcPlaneAngleMeasure) measureValue;
-      return "" + planeAngleMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcParameterValue) {
-      IfcParameterValue parameterValue = (IfcParameterValue) measureValue;
-      return "" + parameterValue.getWrappedValue();
-    } else if (measureValue instanceof IfcNumericMeasure) {
-      IfcNumericMeasure numericMeasure = (IfcNumericMeasure) measureValue;
-      return "" + numericMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcMassMeasure) {
-      IfcMassMeasure massMeasure = (IfcMassMeasure) measureValue;
-      return "" + massMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcPositiveLengthMeasure) {
-      IfcPositiveLengthMeasure positiveLengthMeasure = (IfcPositiveLengthMeasure) measureValue;
-      return "" + positiveLengthMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcLengthMeasure) {
-      IfcLengthMeasure lengthMeasure = (IfcLengthMeasure) measureValue;
-      return "" + lengthMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcElectricCurrentMeasure) {
-      IfcElectricCurrentMeasure electricCurrentMeasure = (IfcElectricCurrentMeasure) measureValue;
-      return "" + electricCurrentMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcDescriptiveMeasure) {
-      IfcDescriptiveMeasure descriptiveMeasure = (IfcDescriptiveMeasure) measureValue;
-      return "" + descriptiveMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcCountMeasure) {
-      IfcCountMeasure countMeasure = (IfcCountMeasure) measureValue;
-      return "" + countMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcContextDependentMeasure) {
-      IfcContextDependentMeasure contextDependentMeasure = (IfcContextDependentMeasure) measureValue;
-      return "" + contextDependentMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcAreaMeasure) {
-      IfcAreaMeasure areaMeasure = (IfcAreaMeasure) measureValue;
-      return "" + areaMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcAmountOfSubstanceMeasure) {
-      IfcAmountOfSubstanceMeasure substanceMeasure = (IfcAmountOfSubstanceMeasure) measureValue;
-      return "" + substanceMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcLuminousIntensityMeasure) {
-      IfcLuminousIntensityMeasure luminousIntensityMeasure =
-          (IfcLuminousIntensityMeasure) measureValue;
-      return "" + luminousIntensityMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcNormalisedRatioMeasure) {
-      IfcNormalisedRatioMeasure normalisedRatioMeasure = (IfcNormalisedRatioMeasure) measureValue;
-      return "" + normalisedRatioMeasure.getWrappedValue();
-    } else if (measureValue instanceof IfcComplexNumber) {
-      IfcComplexNumber complexNumber = (IfcComplexNumber) measureValue;
-      return "" + complexNumber.getWrappedValue();
-    } else {
-      log.info("Unknown IfcPropertySingleValue value : " + measureValue.toString());
-    }
-    return null;
   }
 
   /**
@@ -507,33 +369,52 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
     if (representation != null) {
       EList<IfcRepresentation> representations = representation.getRepresentations();
       for (IfcRepresentation rep : representations) {
-        EList<IfcRepresentationItem> items = rep.getItems();
-        for (IfcRepresentationItem item : items) {
-          if (item instanceof IfcStyledItem) {
-            double[] material = getColorAndTransparency((IfcStyledItem) item);
+        double[] material = getMaterial(rep);
+        if (material != null) {
+          return material;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Searches all {@link IfcStyledItem} that is referenced to the {@link IfcRepresentation} and
+   * returns the color {red, green, blue, alpha} for the {@link IfcRepresentation}.
+   *
+   * @param ifcRepresentation
+   * @return The float array of the {@link IfcProduct}'s material's color. Null if doesn't exist.
+   */
+  private double[] getMaterial(IfcRepresentation ifcRepresentation) {
+    EList<IfcRepresentationItem> items = ifcRepresentation.getItems();
+    for (IfcRepresentationItem item : items) {
+      if (item instanceof IfcStyledItem) {
+        double[] material = getColorAndTransparency((IfcStyledItem) item);
+        if (material != null) {
+          return material;
+        }
+      } else {
+        if (item instanceof IfcBooleanClippingResult) {
+          for (IfcStyledItem sItem :
+              getStyledItemsFromBooleanResult((IfcBooleanClippingResult) item)) {
+            double[] material = getColorAndTransparency(sItem);
             if (material != null) {
               return material;
             }
-          } else {
-            if (item instanceof IfcBooleanClippingResult) {
-              for (IfcStyledItem sItem : getStyledItemsFromBooleanResult(
-                  (IfcBooleanClippingResult) item)) {
-                double[] material = getColorAndTransparency(sItem);
-                if (material != null) {
-                  return material;
-                }
-              }
-            }
-            if (item instanceof IfcMappedItem) {
-              //TODO(Brandon) extract styles.
-            }
-            EList<IfcStyledItem> styledByItem = item.getStyledByItem();
-            for (IfcStyledItem sItem : styledByItem) {
-              double[] material = getColorAndTransparency(sItem);
-              if (material != null) {
-                return material;
-              }
-            }
+          }
+        }
+        EList<IfcStyledItem> styledByItem = item.getStyledByItem();
+        for (IfcStyledItem sItem : styledByItem) {
+          double[] material = getColorAndTransparency(sItem);
+          if (material != null) {
+            return material;
+          }
+        }
+        if (item instanceof IfcMappedItem) {
+          IfcMappedItem mappedItem = (IfcMappedItem) item;
+          double[] material = getMaterial(mappedItem.getMappingSource().getMappedRepresentation());
+          if (material != null) {
+            return material;
           }
         }
       }
@@ -591,10 +472,9 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
             if (style instanceof IfcSurfaceStyleRendering) {
               IfcSurfaceStyleRendering ssr = (IfcSurfaceStyleRendering) style;
               IfcColourRgb colour = ssr.getSurfaceColour();
-              double transparency = 1 - ssr.getTransparency();
+              double alpha = 1 - ssr.getTransparency();
               if (colour != null) {
-                return new double[] {colour.getRed(), colour.getGreen(), colour.getBlue(),
-                    transparency};
+                return new double[] {colour.getRed(), colour.getGreen(), colour.getBlue(), alpha};
               }
             } else {
               log.info("Surface style type: " + style.getClass().getSimpleName() + " is not " +
@@ -646,98 +526,5 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
       buffer.putFloat((i + 8) * 4, z2);
     }
     buffer.position(0);
-  }
-
-  /**
-   * @param classObject
-   * @return The IFC object class name without the 'Impl' suffix.
-   */
-  private static String stripClassName(Class<?> classObject) {
-    String name = classObject.getSimpleName();
-    int implIndex = name.lastIndexOf("Impl");
-    return name.substring(0, implIndex < 0 ? name.length() : implIndex);
-  }
-
-  /**
-   * @param model
-   * @return
-   */
-  private static SIPrefix getLengthUnitPrefix(IfcModelInterface model) {
-    SIPrefix lengthUnitPrefix = null;
-    boolean prefixFound = false;
-    Map<Long, IdEObject> objects = model.getObjects();
-    for (IdEObject object : objects.values()) {
-      if (object instanceof IfcProject) {
-        IfcUnitAssignment unitsInContext = ((IfcProject) object).getUnitsInContext();
-        if (unitsInContext != null) {
-          EList<IfcUnit> units = unitsInContext.getUnits();
-          for (IfcUnit unit : units) {
-            if (unit instanceof IfcSIUnit) {
-              IfcSIUnit ifcSIUnit = (IfcSIUnit) unit;
-              IfcUnitEnum unitType = ifcSIUnit.getUnitType();
-              if (unitType == IfcUnitEnum.LENGTHUNIT) {
-                prefixFound = true;
-                switch (ifcSIUnit.getPrefix()) {
-                  case EXA:
-                    lengthUnitPrefix = SIPrefix.EXAMETER;
-                    break;
-                  case PETA:
-                    lengthUnitPrefix = SIPrefix.PETAMETER;
-                    break;
-                  case TERA:
-                    lengthUnitPrefix = SIPrefix.TERAMETER;
-                    break;
-                  case GIGA:
-                    lengthUnitPrefix = SIPrefix.GIGAMETER;
-                    break;
-                  case MEGA:
-                    lengthUnitPrefix = SIPrefix.MEGAMETER;
-                    break;
-                  case KILO:
-                    lengthUnitPrefix = SIPrefix.KILOMETER;
-                    break;
-                  case HECTO:
-                    lengthUnitPrefix = SIPrefix.HECTOMETER;
-                    break;
-                  case DECA:
-                    lengthUnitPrefix = SIPrefix.DECAMETER;
-                    break;
-                  case DECI:
-                    lengthUnitPrefix = SIPrefix.DECIMETER;
-                    break;
-                  case CENTI:
-                    lengthUnitPrefix = SIPrefix.CENTIMETER;
-                    break;
-                  case MILLI:
-                    lengthUnitPrefix = SIPrefix.MILLIMETER;
-                    break;
-                  case MICRO:
-                    lengthUnitPrefix = SIPrefix.MICROMETER;
-                    break;
-                  case NANO:
-                    lengthUnitPrefix = SIPrefix.NANOMETER;
-                    break;
-                  case PICO:
-                    lengthUnitPrefix = SIPrefix.PICOMETER;
-                    break;
-                  case FEMTO:
-                    lengthUnitPrefix = SIPrefix.FEMTOMETER;
-                    break;
-                  case ATTO:
-                    lengthUnitPrefix = SIPrefix.ATTOMETER;
-                    break;
-                  case NULL:
-                    lengthUnitPrefix = SIPrefix.METER;
-                    break;
-                }
-                break;
-              }
-            }
-          }
-        }
-      }
-      if (prefixFound) break;
-    }
-    return lengthUnitPrefix;
   }
 }
