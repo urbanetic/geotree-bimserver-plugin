@@ -1,21 +1,5 @@
 package au.com.mutopia.plugin.serializer;
 
-import au.com.mutopia.plugin.util.IfcUtil;
-
-import com.google.common.base.Charsets;
-import com.google.common.base.Strings;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.gson.stream.JsonWriter;
-
-import org.bimserver.geometry.Matrix;
-import org.bimserver.models.ifc2x3tc1.*;
-import org.bimserver.models.store.SIPrefix;
-import org.bimserver.plugins.renderengine.RenderEngineException;
-import org.bimserver.plugins.serializers.AbstractGeometrySerializer;
-import org.bimserver.plugins.serializers.SerializerException;
-import org.eclipse.emf.common.util.EList;
-
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -29,6 +13,68 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
+import org.bimserver.geometry.Matrix;
+import org.bimserver.models.ifc2x3tc1.GeometryData;
+import org.bimserver.models.ifc2x3tc1.GeometryInfo;
+import org.bimserver.models.ifc2x3tc1.IfcBooleanClippingResult;
+import org.bimserver.models.ifc2x3tc1.IfcBooleanOperand;
+import org.bimserver.models.ifc2x3tc1.IfcBooleanResult;
+import org.bimserver.models.ifc2x3tc1.IfcColourRgb;
+import org.bimserver.models.ifc2x3tc1.IfcCsgPrimitive3D;
+import org.bimserver.models.ifc2x3tc1.IfcElementQuantity;
+import org.bimserver.models.ifc2x3tc1.IfcGroup;
+import org.bimserver.models.ifc2x3tc1.IfcHalfSpaceSolid;
+import org.bimserver.models.ifc2x3tc1.IfcMappedItem;
+import org.bimserver.models.ifc2x3tc1.IfcMaterial;
+import org.bimserver.models.ifc2x3tc1.IfcMaterialLayer;
+import org.bimserver.models.ifc2x3tc1.IfcMaterialLayerSet;
+import org.bimserver.models.ifc2x3tc1.IfcMaterialLayerSetUsage;
+import org.bimserver.models.ifc2x3tc1.IfcMaterialSelect;
+import org.bimserver.models.ifc2x3tc1.IfcObject;
+import org.bimserver.models.ifc2x3tc1.IfcObjectDefinition;
+import org.bimserver.models.ifc2x3tc1.IfcPhysicalQuantity;
+import org.bimserver.models.ifc2x3tc1.IfcPresentationStyleAssignment;
+import org.bimserver.models.ifc2x3tc1.IfcPresentationStyleSelect;
+import org.bimserver.models.ifc2x3tc1.IfcProduct;
+import org.bimserver.models.ifc2x3tc1.IfcProductRepresentation;
+import org.bimserver.models.ifc2x3tc1.IfcProject;
+import org.bimserver.models.ifc2x3tc1.IfcProperty;
+import org.bimserver.models.ifc2x3tc1.IfcPropertySet;
+import org.bimserver.models.ifc2x3tc1.IfcPropertySetDefinition;
+import org.bimserver.models.ifc2x3tc1.IfcPropertySingleValue;
+import org.bimserver.models.ifc2x3tc1.IfcRelAssigns;
+import org.bimserver.models.ifc2x3tc1.IfcRelAssignsToGroup;
+import org.bimserver.models.ifc2x3tc1.IfcRelAssociates;
+import org.bimserver.models.ifc2x3tc1.IfcRelAssociatesMaterial;
+import org.bimserver.models.ifc2x3tc1.IfcRelContainedInSpatialStructure;
+import org.bimserver.models.ifc2x3tc1.IfcRelDecomposes;
+import org.bimserver.models.ifc2x3tc1.IfcRelDefines;
+import org.bimserver.models.ifc2x3tc1.IfcRelDefinesByProperties;
+import org.bimserver.models.ifc2x3tc1.IfcRelDefinesByType;
+import org.bimserver.models.ifc2x3tc1.IfcRepresentation;
+import org.bimserver.models.ifc2x3tc1.IfcRepresentationItem;
+import org.bimserver.models.ifc2x3tc1.IfcRoot;
+import org.bimserver.models.ifc2x3tc1.IfcSite;
+import org.bimserver.models.ifc2x3tc1.IfcSolidModel;
+import org.bimserver.models.ifc2x3tc1.IfcSpace;
+import org.bimserver.models.ifc2x3tc1.IfcSpatialStructureElement;
+import org.bimserver.models.ifc2x3tc1.IfcStyledItem;
+import org.bimserver.models.ifc2x3tc1.IfcSurfaceStyle;
+import org.bimserver.models.ifc2x3tc1.IfcSurfaceStyleElementSelect;
+import org.bimserver.models.ifc2x3tc1.IfcSurfaceStyleRendering;
+import org.bimserver.models.ifc2x3tc1.IfcZone;
+import org.bimserver.models.store.SIPrefix;
+import org.bimserver.plugins.renderengine.RenderEngineException;
+import org.bimserver.plugins.serializers.AbstractGeometrySerializer;
+import org.bimserver.plugins.serializers.SerializerException;
+import org.eclipse.emf.common.util.EList;
+
+import au.com.mutopia.plugin.util.IfcUtil;
+
+import com.google.common.base.Charsets;
+import com.google.common.base.Strings;
+import com.google.gson.stream.JsonWriter;
+
 /**
  * Serializer for BimServer, to extract Ifc object hierarchy, color and parameters.
  */
@@ -39,13 +85,21 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
 
   public static final String AREA = "area";
   public static final String HEIGHT = "height";
-  public static final String LONG_NAME = "LongName";
   public static final String UNKNOWN_STYLE = "UNKNOWN";
 
-  private final List<Long> surfaceStyleIds = Lists.newArrayList();
-  private final HashMap<String, double[]> materialColorMap = Maps.newHashMap();
+  private static final String PARAMETER = "parameters";
 
-  private List<GeometryData> geometryDatas = Lists.newArrayList();
+  private static final String LONG_NAME_PROPERTY = "long_name";
+  private static final String ZONE_PROPERTY = "zone";
+  private static final String SPACE_CODE_PROPERTY = "space_code";
+  private static final String MATERIAL_NAME_PROPERTY = "material_name";
+  private static final String MATERIAL_THICKNESS_PROPERTY = "material_thickness";
+
+  private List<Long> surfaceStyleIds = new ArrayList<>();
+  private HashMap<String, double[]> materialColorMap = new HashMap<>();
+  private HashMap<IfcObject, IfcMaterialSelect> objectMaterialMap = new HashMap<>();
+
+  private List<GeometryData> geometryDatas = new ArrayList<>();
   private int sameGeometry = 0;
 
   private double lengthUnitConversion = 1.0; // Default to Meter;
@@ -67,6 +121,7 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
       JsonWriter jsonWriter = new JsonWriter(new BufferedWriter(outputStreamWriter));
       try {
         calculateLengthUnitConversion();
+        mapObjectMaterials();
         writeIfcGeometryTree(jsonWriter);
         jsonWriter.flush();
       } catch (Exception e) {
@@ -89,6 +144,21 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
       lengthUnitConversion = 1;
     } else {
       lengthUnitConversion = Math.pow(10.0, lengthUnitPrefix.getValue());
+    }
+  }
+
+  /**
+   * Maps {@link IfcObject}s to their corresponding {@link IfcMaterialSelect}s, which contains data
+   * regarding the type and/or thickness of the material layers.
+   */
+  private void mapObjectMaterials() {
+    for (IfcRelAssociatesMaterial associatesMaterial :
+        model.getAllWithSubTypes(IfcRelAssociatesMaterial.class)) {
+      for (IfcRoot root : associatesMaterial.getRelatedObjects()) {
+        if (!(root instanceof IfcObject)) continue;
+        IfcObject object = (IfcObject) root;
+        objectMaterialMap.put(object, associatesMaterial.getRelatingMaterial());
+      }
     }
   }
 
@@ -122,7 +192,7 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
    */
   private void writeIfcTreeObject(JsonWriter writer, IfcObject object) throws IOException {
     writer.beginObject();
-    writer.name("id").value(object.getOid());
+    writer.name("id").value(object.getGlobalId());
     String name = "unknown";
     if (object.isSetName()) {
       name = object.getName();
@@ -133,9 +203,6 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
     }
     if (object instanceof IfcSpatialStructureElement) {
       IfcSpatialStructureElement spatialStructureElement = (IfcSpatialStructureElement) object;
-      if (spatialStructureElement.isSetLongName()) {
-        name = spatialStructureElement.getLongName();
-      }
       if (spatialStructureElement instanceof IfcSite) {
         type = ifcUtil.stripClassName(IfcSite.class);
 
@@ -192,14 +259,161 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
    * @throws IOException
    */
   private void writeParameters(JsonWriter writer, IfcObject object) throws IOException {
-    Map<String, String> parameters = getParameters(object.getIsDefinedBy());
+    Map<String, String> parameters = new HashMap<>();
+    parameters.putAll(getPropertiesFromDefinedBy(object.getIsDefinedBy()));
+    parameters.putAll(getParametersFromAssignments(object.getHasAssignments()));
+    parameters.putAll(getParametersFromAssociates(object.getHasAssociations()));
+    parameters.putAll(getParametersFromMaterialSelect(object));
+
+    if (object instanceof IfcSpatialStructureElement) {
+      IfcSpatialStructureElement spatialStructureElement = (IfcSpatialStructureElement) object;
+      if (spatialStructureElement.isSetLongName()) {
+        parameters.put(LONG_NAME_PROPERTY, spatialStructureElement.getLongName());
+      }
+    }
     if (parameters != null && !parameters.isEmpty()) {
-      writer.name("parameters").beginObject();
+      writer.name(PARAMETER).beginObject();
       for (String parameterName : parameters.keySet()) {
         writer.name(parameterName).value(parameters.get(parameterName));
       }
       writer.endObject();
     }
+  }
+
+  /**
+   * Collects the {key, value} map for properties extracted from the list of {@link IfcRelDefines}s.
+   *
+   * @param isDefinedBy
+   * @return The {key, value} map properties from a list of {@link IfcRelDefines} of an
+   * {@link IfcObject};
+   */
+  private Map<String, String> getPropertiesFromDefinedBy(EList<IfcRelDefines> isDefinedBy) {
+    Map<String, String> parameters = new HashMap<>();
+    if (isDefinedBy == null || isDefinedBy.isEmpty()) {
+      return parameters;
+    }
+    for (IfcRelDefines ifcRelDefines : isDefinedBy) {
+      if (ifcRelDefines instanceof IfcRelDefinesByProperties) {
+        IfcRelDefinesByProperties relDefinesByProperties =
+            (IfcRelDefinesByProperties) ifcRelDefines;
+        IfcPropertySetDefinition relatingPropertyDefinition =
+            relDefinesByProperties.getRelatingPropertyDefinition();
+        if (relatingPropertyDefinition instanceof IfcPropertySet) {
+          IfcPropertySet propertySet = (IfcPropertySet) relatingPropertyDefinition;
+          for (IfcProperty ifcProperty : propertySet.getHasProperties()) {
+            if (ifcProperty instanceof IfcPropertySingleValue) {
+              IfcPropertySingleValue ifcPropertySingleValue = (IfcPropertySingleValue) ifcProperty;
+              String value =
+                  ifcUtil.getStringValueFromIfcValue(ifcPropertySingleValue.getNominalValue());
+              if (!Strings.isNullOrEmpty(value)) {
+                parameters.put(ifcPropertySingleValue.getName(), value);
+              }
+            } else {
+              log.info("Unknown IfcProperty value : " + ifcProperty.getName());
+              continue;
+            }
+          }
+        } else if (relatingPropertyDefinition instanceof IfcElementQuantity) {
+          IfcElementQuantity ifcElementQuantity = (IfcElementQuantity) relatingPropertyDefinition;
+          for (IfcPhysicalQuantity ifcPhysicalQuantity : ifcElementQuantity.getQuantities()) {
+            String value = ifcUtil.getStringValueFromIfcPhysicalQuantity(ifcPhysicalQuantity);
+            if (!Strings.isNullOrEmpty(value)) {
+              parameters.put(ifcPhysicalQuantity.getName(), value);
+            }
+          }
+        } else {
+          log.info("Unknown IfcPropertySetDefinition : " + relatingPropertyDefinition);
+          continue;
+        }
+      } else if (ifcRelDefines instanceof IfcRelDefinesByType) {
+        IfcRelDefinesByType relDefinesByType = (IfcRelDefinesByType) ifcRelDefines;
+        parameters.put(SPACE_CODE_PROPERTY, relDefinesByType.getRelatingType().getName());
+      }
+    }
+    return parameters;
+  }
+
+  /**
+   * Collects the {key, value} map for properties extracted from the list of {@link IfcRelAssigns}s.
+   *
+   * @param assignments
+   * @return The {key, value} map properties from a list of {@link IfcRelAssigns} of an
+   * {@link IfcObject};
+   */
+  private Map<String, String> getParametersFromAssignments(EList<IfcRelAssigns> assignments) {
+    Map<String, String> parameters = new HashMap<>();
+    if (assignments == null || assignments.isEmpty()) {
+      return parameters;
+    }
+    for (IfcRelAssigns assignment : assignments) {
+      if (assignment instanceof IfcRelAssignsToGroup) {
+        IfcRelAssignsToGroup relAssignsToGroup = (IfcRelAssignsToGroup) assignment;
+        IfcGroup relatingGroup = relAssignsToGroup.getRelatingGroup();
+        if (relatingGroup instanceof IfcZone) {
+          parameters.put(ZONE_PROPERTY , relatingGroup.getName());
+        }
+      }
+    }
+    return parameters;
+  }
+
+  /**
+   * Collects the {key, value} map for properties extracted from the list of
+   * {@link IfcRelAssociates}s.
+   *
+   * @param associations
+   * @return The {key, value} map properties from a list of {@link IfcRelAssociates} of an
+   * {@link IfcObject};
+   */
+  private Map<String, String> getParametersFromAssociates(EList<IfcRelAssociates> associations) {
+    Map<String, String> parameters = new HashMap<>();
+    if (associations == null || associations.isEmpty()) {
+      return parameters;
+    }
+    for (IfcRelAssociates association : associations) {
+      if (association instanceof IfcRelAssociatesMaterial) {
+        IfcRelAssociatesMaterial associatesMaterial = (IfcRelAssociatesMaterial) association;
+        parameters.putAll(getParameterFromMaterial(associatesMaterial.getRelatingMaterial()));
+      }
+    }
+    return parameters;
+  }
+
+  /**
+   * Collects the {key, value} map for properties regarding the {@link IfcObject}'s material.
+   *
+   * @param object
+   * @return The {key, value} map value properties describing the {@link IfcObject}'s material.
+   */
+  private Map<String, String> getParametersFromMaterialSelect(IfcObject object) {
+    Map<String, String> parameters = new HashMap<>();
+    if (!objectMaterialMap.containsKey(object)) {
+      return parameters;
+    }
+    return getParameterFromMaterial(objectMaterialMap.get(object));
+  }
+
+  /**
+   * Collects the {key, value} map for properties from {@link IfcMaterialSelect} which describe the
+   * material properties.
+   *
+   * @param materialSelect
+   * @return The {key, value} map value properties describing the {@link IfcMaterialSelect}.
+   */
+  private Map<String, String> getParameterFromMaterial(IfcMaterialSelect materialSelect) {
+    Map<String, String> parameters = new HashMap<>();
+    if (materialSelect instanceof IfcMaterial) {
+      parameters.put(MATERIAL_NAME_PROPERTY, ((IfcMaterial) materialSelect).getName());
+    } else if (materialSelect instanceof IfcMaterialLayerSetUsage) {
+      IfcMaterialLayerSetUsage materialLayerSetUsage = (IfcMaterialLayerSetUsage) materialSelect;
+      IfcMaterialLayerSet layerSet = materialLayerSetUsage.getForLayerSet();
+      EList<IfcMaterialLayer> materialLayers = layerSet.getMaterialLayers();
+      IfcMaterialLayer ifcMaterialLayer = materialLayers.get(0);
+      parameters.put(MATERIAL_NAME_PROPERTY, ifcMaterialLayer.getMaterial().getName());
+      parameters.put(MATERIAL_THICKNESS_PROPERTY,
+          Double.toString(ifcMaterialLayer.getLayerThickness()));
+    }
+    return parameters;
   }
 
   /**
@@ -233,9 +447,6 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
    * @throws IOException
    */
   private void writeMaterialAndGeometry(JsonWriter writer, IfcProduct product) throws IOException {
-    if (product instanceof IfcSpace) {
-      return;
-    }
     GeometryInfo geometryInfo = product.getGeometry();
     if (geometryInfo != null && geometryInfo.getData() != null) {
       GeometryData geometryData = geometryInfo.getData();
@@ -307,54 +518,6 @@ public class JsonIfcGeometryTreeSerializer extends AbstractGeometrySerializer {
 
       writer.endObject();
     }
-  }
-
-  /**
-   * @param isDefinedBy
-   * @return The map of key to value parameters from a list of {@link IfcRelDefines} of an
-   * {@link IfcObject};
-   */
-  private Map<String, String> getParameters(EList<IfcRelDefines> isDefinedBy) {
-    Map<String, String> parameterValueMap = new HashMap<>();
-    if (isDefinedBy == null || isDefinedBy.isEmpty()) {
-      return parameterValueMap;
-    }
-    for (IfcRelDefines ifcRelDefines : isDefinedBy) {
-      if (ifcRelDefines instanceof IfcRelDefinesByProperties) {
-        IfcRelDefinesByProperties ifcRelDefinesByProperties =
-            (IfcRelDefinesByProperties) ifcRelDefines;
-        IfcPropertySetDefinition relatingPropertyDefinition =
-            ifcRelDefinesByProperties.getRelatingPropertyDefinition();
-        if (relatingPropertyDefinition instanceof IfcPropertySet) {
-          IfcPropertySet ifcPropertySet = (IfcPropertySet) relatingPropertyDefinition;
-          for (IfcProperty ifcProperty : ifcPropertySet.getHasProperties()) {
-            if (ifcProperty instanceof IfcPropertySingleValue) {
-              IfcPropertySingleValue ifcPropertySingleValue = (IfcPropertySingleValue) ifcProperty;
-              String value =
-                  ifcUtil.getStringValueFromIfcValue(ifcPropertySingleValue.getNominalValue());
-              if (!Strings.isNullOrEmpty(value)) {
-                parameterValueMap.put(ifcPropertySingleValue.getName(), value);
-              }
-            } else {
-              log.info("Unknown IfcProperty value : " + ifcProperty.getName());
-              continue;
-            }
-          }
-        } else if (relatingPropertyDefinition instanceof IfcElementQuantity) {
-          IfcElementQuantity ifcElementQuantity = (IfcElementQuantity) relatingPropertyDefinition;
-          for (IfcPhysicalQuantity ifcPhysicalQuantity : ifcElementQuantity.getQuantities()) {
-            String value = ifcUtil.getStringValueFromIfcPhysicalQuantity(ifcPhysicalQuantity);
-            if (!Strings.isNullOrEmpty(value)) {
-              parameterValueMap.put(ifcPhysicalQuantity.getName(), value);
-            }
-          }
-        } else {
-          log.info("Unknown IfcPropertySetDefinition : " + relatingPropertyDefinition);
-          continue;
-        }
-      }
-    }
-    return parameterValueMap;
   }
 
   /**

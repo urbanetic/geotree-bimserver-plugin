@@ -4,8 +4,4 @@
     <interfaceClass>org.bimserver.plugins.serializers.SerializerPlugin</interfaceClass>
     <implementationClass>au.com.mutopia.plugin.serializer.JsonIfcGeometryTreeSerializerPlugin</implementationClass>
   </PluginImplementation>
-  <PluginImplementation>
-    <interfaceClass>org.bimserver.plugins.deserializers.DeserializerPlugin</interfaceClass>
-    <implementationClass>au.com.mutopia.plugin.deserializer.JsonIfcGeometryTreeDeserializerPlugin</implementationClass>
-  </PluginImplementation>
 </PluginDescriptor>

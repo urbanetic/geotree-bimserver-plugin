@@ -4,13 +4,12 @@
 
   <groupId>au.com.mutopia</groupId>
   <artifactId>geotree-bimserver-plugin</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 
   <properties>
     <runnableJarName>geotree-bimserver-plugin</runnableJarName>
     <bimserver.version>1.3.0</bimserver.version>
     <emf.version>2.5.0</emf.version>
-    <geo-coords.version>1.0.0</geo-coords.version>
     <java.version>1.7</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -98,13 +97,6 @@
       <groupId>org.mod4j.org.eclipse.emf</groupId>
       <artifactId>ecore</artifactId>
       <version>${emf.version}</version>
-    </dependency>
-
-    <!-- Coordinates API -->
-    <dependency>
-      <groupId>org.nasa</groupId>
-      <artifactId>ww-geo-coords</artifactId>
-      <version>${geo-coords.version}</version>
     </dependency>
 
   </dependencies>
