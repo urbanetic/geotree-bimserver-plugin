@@ -22,6 +22,10 @@ To install the plugin:
 3. Copy the compiled JAR to the `plugins` folder in the directory to which you installed BIMserver
 4. Restart the BIMserver service
 
+To build docker from the parent directory:
+
+1. docker build --rm -t urbanetic/geotree-bimserver:latest -f docker/Dockerfile .
+
 If the plugin was instaled successfully, you should be able to see a plugin called
 `JsonIfcGeometryTreeSerializerPlugin` listed in the [Plugins section of the admin view][plugins].
 

@@ -2,7 +2,7 @@ FROM urbanetic/bimserver
 MAINTAINER Oliver Lade <oliver.lade@unimelb.edu.au>
 
 # Add the packaged JAR file into the image.
-ADD geotree-bimserver-plugin.jar $BIMSERVER_APP/WEB-INF/plugins/geotree-bimserver-plugin.jar
+ADD target/geotree-bimserver-plugin.jar $BIMSERVER_APP/WEB-INF/plugins/geotree-bimserver-plugin.jar
 
 # Start the BIMserver process and send a request to perform the initial admin setup.
 # Admin username is "admin@bimserver.org", and password is "admin".
